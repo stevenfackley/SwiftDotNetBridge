@@ -21,6 +21,7 @@ public sealed class BridgeServer : IDisposable
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private int _port;
+    private int _activeConnections;
 
     /// <summary>Create a server that dispatches requests against the given route table.</summary>
     public BridgeServer(RouteTable routes) => _routes = routes;
@@ -79,12 +80,52 @@ public sealed class BridgeServer : IDisposable
                     break;
                 }
 
-                _ = HandleClientAsync(client, ct);
+                _ = HandleConnectionAsync(client, ct);
             }
         }
         finally
         {
             ResetIfFaulted(listener, ct);
+        }
+    }
+
+    /// <summary>
+    /// Admission control around <see cref="HandleClientAsync"/>: caps simultaneous connections at
+    /// <see cref="BridgeLimits.MaxConcurrentConnections"/> and sheds the excess with a 503 instead
+    /// of spawning unbounded per-connection tasks under a burst.
+    /// </summary>
+    private async Task HandleConnectionAsync(TcpClient client, CancellationToken ct)
+    {
+        if (Interlocked.Increment(ref _activeConnections) > BridgeLimits.MaxConcurrentConnections)
+        {
+            Interlocked.Decrement(ref _activeConnections);
+            await RejectSaturatedAsync(client, ct).ConfigureAwait(false);
+            return;
+        }
+
+        try { await HandleClientAsync(client, ct).ConfigureAwait(false); }
+        finally { Interlocked.Decrement(ref _activeConnections); }
+    }
+
+    private static async Task RejectSaturatedAsync(TcpClient client, CancellationToken ct)
+    {
+        using (client)
+        {
+            try
+            {
+                var stream = client.GetStream();
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(BridgeLimits.ReadTimeout);
+
+                // Consume the (bounded) request before responding: closing a socket with unread
+                // inbound bytes sends a TCP reset that would nuke the 503 before the client reads it.
+                try { await HttpRequestParser.ReadAsync(stream, cts.Token).ConfigureAwait(false); }
+                catch { /* malformed/oversized request: shed it anyway */ }
+
+                await HttpResponseWriter.WriteAsync(stream,
+                    BridgeResponse.Text("Service Unavailable", 503), cts.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) { BridgeDiagnostics.Error("saturation reject failed", ex); }
         }
     }
 

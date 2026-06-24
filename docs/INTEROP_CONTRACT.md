@@ -84,6 +84,8 @@ reader is bounded and the server fails closed:
 | Request/header line too long | `431` | `MaxLineBytes` (8 KiB) |
 | Too many headers | `431` | `MaxHeaderCount` (100) |
 | `Content-Length` over limit | `413` (before allocating) | `MaxBodyBytes` (16 MiB) |
+| `Transfer-Encoding`, duplicate framing header, or malformed `Content-Length` | `400` | — |
+| Too many concurrent connections | `503` (load shed) | `MaxConcurrentConnections` (16) |
 | Client stalls mid-request | connection dropped | `ReadTimeout` (30 s) |
 | Path matches, method does not | `405` | — |
 | No matching route | `404` | — |
@@ -94,6 +96,9 @@ reader is bounded and the server fails closed:
   itself a DoS.
 - A `500` never echoes the exception message or stack to the client; the full detail goes to
   `BridgeDiagnostics.OnError`.
+- Only `Content-Length` framing is supported; `Transfer-Encoding` is rejected (it is ambiguous
+  against `Content-Length` and a classic request-smuggling vector). `Expect: 100-continue` is
+  honored — the server sends `100 Continue` before reading the body, so larger POSTs don't stall.
 - Set any `BridgeLimits` value (and `BridgeDiagnostics.OnError`) **before** `dni_http_start`.
 - The sample module returns errors as a JSON envelope (`{"error":"..."}`), and the Swift client
   surfaces the response body on `BridgeError.http(status:body:)` rather than discarding it.
