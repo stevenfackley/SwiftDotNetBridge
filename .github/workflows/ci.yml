@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dotnet-tests:
+    name: .NET tests (managed, no AOT)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore, build, test
+        run: dotnet test SwiftDotNetBridge.slnx -c Release
+
+  mac-bridge:
+    name: xcframework + Swift round-trip (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Toolchain versions
+        run: |
+          dotnet --version
+          xcodebuild -version
+          swift --version
+      - name: Native AOT smoke test (exports + loopback /health)
+        run: |
+          chmod +x build/*.sh
+          ./build/verify-native.sh
+      - name: Build xcframework (iOS device + simulator, macOS, Mac Catalyst)
+        run: ./build/build-xcframework.sh
+      - name: Swift round-trip tests (Swift -> C ABI -> .NET -> loopback)
+        run: |
+          cd swift
+          swift test
