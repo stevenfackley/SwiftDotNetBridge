@@ -7,5 +7,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- CS1668: spurious system LIB env-var path warning from VS build tools install -->
+    <NoWarn>$(NoWarn);CS1668</NoWarn>
   </PropertyGroup>
 </Project>

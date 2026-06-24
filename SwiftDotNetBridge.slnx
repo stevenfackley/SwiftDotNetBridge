@@ -1,2 +1,9 @@
 <Solution>
+  <Folder Name="/dotnet/">
+    <Project Path="dotnet/DotnetBridge.Abstractions/DotnetBridge.Abstractions.csproj" />
+    <Project Path="dotnet/DotnetBridge.Host/DotnetBridge.Host.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DotnetBridge.Host.Tests/DotnetBridge.Host.Tests.csproj" />
+  </Folder>
 </Solution>
