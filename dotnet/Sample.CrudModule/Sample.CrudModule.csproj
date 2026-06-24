@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <RootNamespace>Sample.CrudModule</RootNamespace>
+    <IsAotCompatible Condition="'$(TargetFramework)' == 'net10.0'">true</IsAotCompatible>
+    <!-- CA1716: ICustomerStore.Get conflicts with VB keyword; suppressed intentionally (C# API, not VB) -->
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../DotnetBridge.Abstractions/DotnetBridge.Abstractions.csproj" />
+  </ItemGroup>
+  <!-- System.Text.Json (+ source generator) is in the net10 shared framework already;
+       netstandard2.0 needs the package. The generator ships inside it. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Text.Json" Version="9.0.0" />
+  </ItemGroup>
+</Project>

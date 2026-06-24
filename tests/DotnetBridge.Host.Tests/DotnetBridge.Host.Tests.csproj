@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\dotnet\DotnetBridge.Abstractions\DotnetBridge.Abstractions.csproj" />
     <ProjectReference Include="..\..\dotnet\DotnetBridge.Host\DotnetBridge.Host.csproj" />
+    <ProjectReference Include="..\..\dotnet\Sample.CrudModule\Sample.CrudModule.csproj" />
   </ItemGroup>
 
 </Project>
