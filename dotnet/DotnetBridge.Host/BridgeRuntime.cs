@@ -18,32 +18,37 @@ public static class BridgeRuntime
     {
         lock (Gate)
         {
-            if (_initialized) return 0;
+            if (_initialized) return DniStatus.Ok;
             var routes = new RouteTable();
             foreach (var m in modules) m.Configure(routes);
             _routes = routes;
             _server = new BridgeServer(routes);
             _initialized = true;
-            return 0;
+            return DniStatus.Ok;
         }
     }
 
+    /// <summary>Binds and starts the loopback server (idempotent).</summary>
+    /// <returns>The bound port (&gt;0), or <see cref="DniStatus.NotInitialized"/> if not initialized.</returns>
     public static int HttpStart()
     {
         lock (Gate)
         {
-            if (_server is null) return -1;     // DNI_NOT_INITIALIZED
+            if (_server is null) return DniStatus.NotInitialized;
             return _server.Start();             // >0 port
         }
     }
 
+    /// <summary>Stops the loopback server. Safe when not running.</summary>
+    /// <returns><see cref="DniStatus.Ok"/>.</returns>
     public static int HttpStop()
     {
-        lock (Gate) { _server?.Stop(); return 0; }
+        lock (Gate) { _server?.Stop(); return DniStatus.Ok; }
     }
 
+    /// <summary>Releases the server and resets the runtime to its uninitialized state.</summary>
     public static void Shutdown()
     {
-        lock (Gate) { _server?.Stop(); _server = null; _routes = null; _initialized = false; }
+        lock (Gate) { _server?.Dispose(); _server = null; _routes = null; _initialized = false; }
     }
 }

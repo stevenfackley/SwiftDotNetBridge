@@ -4,12 +4,15 @@ import CDni
 /// Thread-safe facade over the in-process .NET HTTP bridge.
 /// `ensureStarted()` calls the (idempotent) C exports; requests go over loopback.
 public actor BridgeClient {
+    /// A shared, process-wide client over the default `URLSession`.
     public static let shared = BridgeClient()
 
     private let session: URLSession
     private var initialized = false
     private var port = 0
 
+    /// Creates a client.
+    /// - Parameter session: the `URLSession` used for loopback requests (defaults to `.shared`).
     public init(session: URLSession = .shared) { self.session = session }
 
     /// Initialize the engine once, then (re)start the loopback server.
@@ -27,9 +30,28 @@ public actor BridgeClient {
     }
 
     /// Issue a request to a user-defined route. Returns (body, httpStatus).
+    ///
+    /// If the loopback connection is refused — the listener was torn down by an iOS
+    /// background-suspend or a server-side accept-loop reset — this forces a fresh
+    /// `ensureStarted()` and retries exactly once. The retry is intentionally limited
+    /// to `cannotConnectToHost` (a refused TCP connect, meaning the request never
+    /// reached the server), so a non-idempotent POST is never silently re-sent after a
+    /// request that may have already been processed.
     public func request(_ method: String, _ path: String,
                         body: Data? = nil,
                         contentType: String = "application/json") async throws -> (Data, Int) {
+        do {
+            return try await send(method, path, body: body, contentType: contentType)
+        } catch let error as URLError where error.code == .cannotConnectToHost {
+            // Listener gone; the connect was refused so nothing ran. Re-bind and retry once.
+            initialized = false
+            port = 0
+            return try await send(method, path, body: body, contentType: contentType)
+        }
+    }
+
+    private func send(_ method: String, _ path: String,
+                      body: Data?, contentType: String) async throws -> (Data, Int) {
         try await ensureStarted()
         guard let url = URL(string: "http://127.0.0.1:\(port)\(path)") else {
             throw BridgeError.badURL(path)
@@ -44,15 +66,24 @@ public actor BridgeClient {
         return (data, (resp as? HTTPURLResponse)?.statusCode ?? -1)
     }
 
+    /// GET `path`, returning the response body. Throws ``BridgeError/http(status:body:)``
+    /// (carrying the server's response body) on any non-200 status.
+    /// - Parameter path: the route path, e.g. `/api/customers`.
     public func get(_ path: String) async throws -> Data {
         let (data, code) = try await request("GET", path)
-        guard code == 200 else { throw BridgeError.http(code) }
+        guard code == 200 else { throw BridgeError.http(status: code, body: data) }
         return data
     }
 
+    /// POST `body` to `path`, returning the response body. Throws
+    /// ``BridgeError/http(status:body:)`` (carrying the server's response body) on any
+    /// non-2xx status.
+    /// - Parameters:
+    ///   - path: the route path, e.g. `/api/customers`.
+    ///   - body: the request body bytes (typically JSON).
     public func post(_ path: String, body: Data) async throws -> Data {
         let (data, code) = try await request("POST", path, body: body)
-        guard (200..<300).contains(code) else { throw BridgeError.http(code) }
+        guard (200..<300).contains(code) else { throw BridgeError.http(status: code, body: data) }
         return data
     }
 

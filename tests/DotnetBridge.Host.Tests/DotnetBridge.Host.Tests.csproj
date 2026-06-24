@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Tests are not public API; XML docs on every [Fact] would be noise. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- Test conventions: top-level classes (CA1050) and underscore names (CA1707) are idiomatic xUnit -->
     <NoWarn>$(NoWarn);CA1050;CA1707;CS1668</NoWarn>
   </PropertyGroup>

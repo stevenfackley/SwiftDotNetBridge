@@ -13,6 +13,7 @@ public sealed class InMemoryCustomerStore : ICustomerStore
     private readonly Dictionary<int, Customer> _items = new();
     private int _nextId;
 
+    /// <summary>Creates the store pre-seeded with a few sample customers.</summary>
     public InMemoryCustomerStore()
     {
         // Mocked seed data — stands in for rows a real DB would return.
@@ -31,16 +32,19 @@ public sealed class InMemoryCustomerStore : ICustomerStore
         };
     }
 
+    /// <inheritdoc />
     public IReadOnlyList<Customer> List()
     {
         lock (_gate) return _items.Values.OrderBy(c => c.Id).ToList();
     }
 
+    /// <inheritdoc />
     public Customer? Get(int id)
     {
         lock (_gate) return _items.TryGetValue(id, out var c) ? c : null;
     }
 
+    /// <inheritdoc />
     public Customer Create(CustomerInput input)
     {
         lock (_gate)
@@ -56,6 +60,7 @@ public sealed class InMemoryCustomerStore : ICustomerStore
         }
     }
 
+    /// <inheritdoc />
     public Customer? Update(int id, CustomerInput input)
     {
         lock (_gate)
@@ -67,6 +72,7 @@ public sealed class InMemoryCustomerStore : ICustomerStore
         }
     }
 
+    /// <inheritdoc />
     public bool Delete(int id)
     {
         lock (_gate) return _items.Remove(id);
