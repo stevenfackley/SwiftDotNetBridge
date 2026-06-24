@@ -9,6 +9,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Stay trim-safe: no reflection-based JSON anywhere in the bridge core. -->
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- Deterministic output name 'dni.dylib' (NativeAOT otherwise prefixes 'lib' on Unix). -->
+    <UseNativeLibPrefix>false</UseNativeLibPrefix>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../DotnetBridge.Host/DotnetBridge.Host.csproj" />

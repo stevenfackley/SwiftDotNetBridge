@@ -1,0 +1,4 @@
+framework module CDni {
+    header "dni.h"
+    export *
+}
