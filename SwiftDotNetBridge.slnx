@@ -2,6 +2,8 @@
   <Folder Name="/dotnet/">
     <Project Path="dotnet/DotnetBridge.Abstractions/DotnetBridge.Abstractions.csproj" />
     <Project Path="dotnet/DotnetBridge.Host/DotnetBridge.Host.csproj" />
+    <Project Path="dotnet/DotnetBridge.Native/DotnetBridge.Native.csproj" />
+    <Project Path="dotnet/Sample.CrudModule/Sample.CrudModule.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/DotnetBridge.Host.Tests/DotnetBridge.Host.Tests.csproj" />
