@@ -6,8 +6,13 @@ using DotnetBridge.Abstractions;
 
 namespace DotnetBridge.Host;
 
+/// <summary>
+/// Serializes a <see cref="BridgeResponse"/> as an HTTP/1.1 response onto the connection
+/// stream: status line, Content-Type/Content-Length, <c>Connection: close</c>, then the body.
+/// </summary>
 public static class HttpResponseWriter
 {
+    /// <summary>Writes the response (head + body) to the stream and flushes.</summary>
     public static async Task WriteAsync(Stream stream, BridgeResponse resp, CancellationToken ct)
     {
         var head = new StringBuilder();
@@ -29,6 +34,7 @@ public static class HttpResponseWriter
     {
         200 => "OK", 201 => "Created", 204 => "No Content",
         400 => "Bad Request", 404 => "Not Found", 405 => "Method Not Allowed",
+        413 => "Payload Too Large", 431 => "Request Header Fields Too Large",
         500 => "Internal Server Error", _ => "Status"
     };
 }

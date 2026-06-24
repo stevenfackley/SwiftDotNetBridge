@@ -9,5 +9,7 @@ public delegate Task<BridgeResponse> RouteHandler(BridgeRequest request, Cancell
 /// <summary>Implement this in YOUR library and register it in the publish head's Bootstrap.</summary>
 public interface IBridgeModule
 {
+    /// <summary>Register the module's routes on the shared <see cref="RouteTable"/>.</summary>
+    /// <param name="routes">The route table to add handlers to.</param>
     void Configure(RouteTable routes);
 }

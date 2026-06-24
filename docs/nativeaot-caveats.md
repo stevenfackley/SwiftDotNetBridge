@@ -58,3 +58,11 @@ re-enable it.
 SwiftPM **library** targets reject Objective-C bridging headers — only a Clang module map exposes the
 C API as an importable module. → `build/module.modulemap` declares `framework module CDni`, shipped
 inside each `.framework`, so consumers `import CDni`.
+
+## 13. A guest runtime has no console — don't swallow errors silently
+Because exceptions must not cross the ABI (caveat #3), every export and every connection handler
+traps broadly. The trap is correct; a *silent* trap is not — a bare `-5` is unsupportable in the
+field. → All swallowed failures route through `BridgeDiagnostics.OnError` (an `Action<string,
+Exception?>`), defaulting to `Console.Error`, which surfaces in `os_log`/the device console. Set it
+to forward bridge-internal errors into your app's logging stack. This is a managed-side seam, so the
+C ABI stays frozen (caveats #1–#2).

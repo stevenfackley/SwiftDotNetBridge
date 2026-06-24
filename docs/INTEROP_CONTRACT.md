@@ -14,7 +14,9 @@ versioned API — changing a signature is a breaking change.
 
 All four are `static`, parameterless, and return only blittable types — the NativeAOT
 `[UnmanagedCallersOnly]` constraints. **Managed exceptions never cross the boundary**: each export
-traps and maps to `DNI_INTERNAL`.
+traps and maps to `DNI_INTERNAL`, and reports the cause through `BridgeDiagnostics.OnError`
+(default sink: `stderr`, which surfaces in `os_log`) so a `-5` is observable rather than silent.
+The ABI itself is unchanged — diagnostics are a managed-side seam, so the C surface stays frozen.
 
 ### Status codes
 
@@ -71,6 +73,30 @@ public sealed class MyModule : IBridgeModule
   `request.RouteValues`.
 - Register your module instance(s) in `DotnetBridge.Native/Bootstrap.cs` (NativeAOT forbids runtime
   assembly loading, so modules are wired at compile time).
+
+## HTTP-layer error handling & limits
+
+The loopback transport is the one place untrusted, attacker-shaped bytes enter the process, so the
+reader is bounded and the server fails closed:
+
+| Condition | Response | Knob (`BridgeLimits`) |
+|---|---|---|
+| Request/header line too long | `431` | `MaxLineBytes` (8 KiB) |
+| Too many headers | `431` | `MaxHeaderCount` (100) |
+| `Content-Length` over limit | `413` (before allocating) | `MaxBodyBytes` (16 MiB) |
+| Client stalls mid-request | connection dropped | `ReadTimeout` (30 s) |
+| Path matches, method does not | `405` | — |
+| No matching route | `404` | — |
+| Route handler throws | `500` (generic body; detail → `BridgeDiagnostics`) | — |
+
+- A rejected oversized request is **bounded-drained** (≤ 64 KiB) before the connection closes, so the
+  client reads the `413` cleanly instead of a TCP reset — without letting a huge body make the drain
+  itself a DoS.
+- A `500` never echoes the exception message or stack to the client; the full detail goes to
+  `BridgeDiagnostics.OnError`.
+- Set any `BridgeLimits` value (and `BridgeDiagnostics.OnError`) **before** `dni_http_start`.
+- The sample module returns errors as a JSON envelope (`{"error":"..."}`), and the Swift client
+  surfaces the response body on `BridgeError.http(status:body:)` rather than discarding it.
 
 ---
 

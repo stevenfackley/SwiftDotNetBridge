@@ -7,6 +7,9 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- Documentation is a compile gate: missing XML docs (CS1591) become build errors via
+         TreatWarningsAsErrors, so every public member is guaranteed to be documented. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- CS1668: spurious system LIB env-var path warning from VS build tools install -->
     <NoWarn>$(NoWarn);CS1668</NoWarn>
   </PropertyGroup>
