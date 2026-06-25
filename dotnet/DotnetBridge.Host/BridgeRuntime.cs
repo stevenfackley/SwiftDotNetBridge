@@ -19,6 +19,9 @@ public static class BridgeRuntime
         lock (Gate)
         {
             if (_initialized) return DniStatus.Ok;
+            // Source the optional capability token out-of-band (no ABI change). Set by the Swift
+            // host via setenv before dni_initialize; absent => auth disabled (open loopback).
+            BridgeAuth.Configure(Environment.GetEnvironmentVariable(BridgeAuth.EnvVarName));
             var routes = new RouteTable();
             foreach (var m in modules) m.Configure(routes);
             _routes = routes;
