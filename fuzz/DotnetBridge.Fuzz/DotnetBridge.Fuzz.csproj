@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <!-- Fuzz harness, not shipped API — no XML-doc gate. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpFuzz" Version="2.1.1" />
+    <ProjectReference Include="..\..\dotnet\DotnetBridge.Host\DotnetBridge.Host.csproj" />
+  </ItemGroup>
+
+</Project>
