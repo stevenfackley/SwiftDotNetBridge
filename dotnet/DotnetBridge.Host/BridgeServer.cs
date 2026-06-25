@@ -22,6 +22,7 @@ public sealed class BridgeServer : IDisposable
     private CancellationTokenSource? _cts;
     private int _port;
     private int _activeConnections;
+    private int _generation;   // bumped on each start/stop; identifies the current listener epoch
 
     /// <summary>Create a server that dispatches requests against the given route table.</summary>
     public BridgeServer(RouteTable routes) => _routes = routes;
@@ -37,29 +38,43 @@ public sealed class BridgeServer : IDisposable
             _port = ((IPEndPoint)listener.LocalEndpoint).Port;
             _cts = new CancellationTokenSource();
             _listener = listener;
-            _ = AcceptLoopAsync(listener, _cts.Token);
+            var generation = ++_generation;
+            _ = AcceptLoopAsync(listener, generation, _cts.Token);
             return _port;
         }
     }
 
-    /// <summary>Stops the listener, cancels in-flight work, and disposes the token source. Idempotent.</summary>
+    /// <summary>
+    /// Stops accepting immediately, lets in-flight requests finish within
+    /// <see cref="BridgeLimits.GracefulStopTimeout"/>, then aborts the remainder. Idempotent.
+    /// </summary>
     public void Stop()
     {
+        CancellationTokenSource? cts;
         lock (_gate)
         {
-            _cts?.Cancel();
-            _listener?.Stop();
+            if (_listener is null) { _cts?.Dispose(); _cts = null; return; }
+            _listener.Stop();          // stop accepting new connections immediately
             _listener = null;
-            _cts?.Dispose();
+            cts = _cts;
             _cts = null;
             _port = 0;
+            _generation++;             // close the epoch so a stale accept-loop can't reset state
         }
+
+        // Give in-flight requests a bounded window to finish before aborting the remainder.
+        var deadline = Environment.TickCount64 + (long)BridgeLimits.GracefulStopTimeout.TotalMilliseconds;
+        while (Volatile.Read(ref _activeConnections) > 0 && Environment.TickCount64 < deadline)
+            Thread.Sleep(10);
+
+        cts?.Cancel();
+        cts?.Dispose();
     }
 
     /// <summary>Stops the server and releases its resources.</summary>
     public void Dispose() => Stop();
 
-    private async Task AcceptLoopAsync(TcpListener listener, CancellationToken ct)
+    private async Task AcceptLoopAsync(TcpListener listener, int generation, CancellationToken ct)
     {
         try
         {
@@ -85,7 +100,7 @@ public sealed class BridgeServer : IDisposable
         }
         finally
         {
-            ResetIfFaulted(listener, ct);
+            ResetIfFaulted(generation, ct);
         }
     }
 
@@ -135,13 +150,13 @@ public sealed class BridgeServer : IDisposable
     /// next <see cref="Start"/> (Swift calls it before every request) then re-binds to a
     /// fresh, working port — turning a previously-unrecoverable wedge into self-healing.
     /// </summary>
-    private void ResetIfFaulted(TcpListener listener, CancellationToken ct)
+    private void ResetIfFaulted(int generation, CancellationToken ct)
     {
         if (ct.IsCancellationRequested) return;                 // Stop() already cleaned up
         lock (_gate)
         {
-            if (!ReferenceEquals(_listener, listener)) return;  // already replaced
-            try { _listener.Stop(); } catch { /* best effort */ }
+            if (_generation != generation) return;              // a newer epoch owns the server now
+            try { _listener?.Stop(); } catch { /* best effort */ }
             _listener = null;
             _cts?.Dispose();
             _cts = null;

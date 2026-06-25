@@ -1,5 +1,8 @@
 import Foundation
 import CDni
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Thread-safe facade over the in-process .NET HTTP bridge.
 /// `ensureStarted()` calls the (idempotent) C exports; requests go over loopback.
@@ -29,6 +32,14 @@ public actor BridgeClient {
     /// dni_http_start is idempotent; re-calling refreshes the port after an iOS
     /// background suspend kills the listener. Blocking C calls run off-actor.
     public func ensureStarted() async throws {
+        // On iOS, refuse to start work when almost no background execution time remains — the OS
+        // would kill it mid-flight. The caller treats this as transient and retries when foregrounded.
+        #if canImport(UIKit)
+        if await Self.backgroundTimeIsCritical() {
+            throw BridgeError.backgroundExpiringSoon
+        }
+        #endif
+
         if !initialized {
             // Hand the capability token to .NET out-of-band (no ABI change): set it in the
             // environment before the first dni_initialize reads it. Re-setting the same value on a
@@ -108,4 +119,13 @@ public actor BridgeClient {
         initialized = false
         port = 0
     }
+
+    #if canImport(UIKit)
+    /// True when so little background execution time remains that starting now risks an OS kill.
+    @MainActor
+    private static func backgroundTimeIsCritical() -> Bool {
+        // .greatestFiniteMagnitude / .infinity when foreground or no active background task.
+        UIApplication.shared.backgroundTimeRemaining < 5
+    }
+    #endif
 }

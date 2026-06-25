@@ -32,4 +32,10 @@ public static class BridgeLimits
     /// Guards against slow/stalled clients holding a connection (and its task) open. Default 30&#160;s.
     /// </summary>
     public static TimeSpan ReadTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long <see cref="BridgeServer.Stop"/> waits for in-flight requests to finish before
+    /// aborting them. Cheap here because it's one request per connection. Default 2&#160;s.
+    /// </summary>
+    public static TimeSpan GracefulStopTimeout { get; set; } = TimeSpan.FromSeconds(2);
 }
