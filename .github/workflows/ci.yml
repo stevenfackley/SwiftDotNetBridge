@@ -64,7 +64,7 @@ jobs:
         run: |
           # SharpFuzz needs this native libFuzzer driver to do real coverage-guided fuzzing;
           # without it the managed target falls back to single-input replay (and crashes on libFuzzer args).
-          wget -q https://raw.githubusercontent.com/Metalnem/sharpfuzz/master/scripts/libfuzzer-dotnet.cc
+          wget -q https://raw.githubusercontent.com/Metalnem/libfuzzer-dotnet/master/libfuzzer-dotnet.cc
           clang -g -O2 -fsanitize=fuzzer libfuzzer-dotnet.cc -o "$GITHUB_WORKSPACE/libfuzzer-dotnet"
       - name: Instrument + 60s fuzz run
         working-directory: fuzz/DotnetBridge.Fuzz/bin/Release/net10.0
