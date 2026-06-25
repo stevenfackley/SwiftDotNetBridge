@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -55,22 +56,63 @@ public static class HttpRequestParser
                 throw new BridgeProtocolException(431, "Too many request headers");
             var idx = line!.IndexOf(':');
             if (idx <= 0) continue;
-            headers[line.AsSpan(0, idx).Trim().ToString()] = line.AsSpan(idx + 1).Trim().ToString();
+            var name = line.AsSpan(0, idx).Trim().ToString();
+            var value = line.AsSpan(idx + 1).Trim().ToString();
+            // Reject a duplicate of any framing-sensitive header — conflicting/ambiguous framing
+            // is the root of request smuggling. Non-sensitive duplicates keep last-wins semantics.
+            if (headers.ContainsKey(name) && IsFramingHeader(name))
+                throw new BridgeProtocolException(400, "Duplicate " + name + " header");
+            headers[name] = value;
         }
 
+        // We only support Content-Length framing. A Transfer-Encoding (e.g. chunked) request is
+        // ambiguous against Content-Length and is a classic smuggling vector — reject it outright.
+        if (headers.ContainsKey("Transfer-Encoding"))
+            throw new BridgeProtocolException(400, "Transfer-Encoding is not supported; use Content-Length");
+
+        var expectContinue = headers.TryGetValue("Expect", out var expect) &&
+            expect.Trim().Equals("100-continue", StringComparison.OrdinalIgnoreCase);
+
         var body = Array.Empty<byte>();
-        if (headers.TryGetValue("Content-Length", out var clRaw) &&
-            int.TryParse(clRaw, out var len) && len > 0)
+        if (headers.TryGetValue("Content-Length", out var clRaw))
         {
+            // Strict parse (digits only, no sign/whitespace); a malformed length is a 400, not a
+            // silently-empty body — which would otherwise be a framing-ambiguity foothold.
+            if (!int.TryParse(clRaw, NumberStyles.None, CultureInfo.InvariantCulture, out var len) || len < 0)
+                throw new BridgeProtocolException(400, "Invalid Content-Length");
+
             if (len > maxBodyBytes)
+                // If the client is waiting on 100-continue it has NOT sent the body yet, so there
+                // is nothing to drain; otherwise the body is already inbound and gets drained.
                 throw new BridgeProtocolException(413,
                     "Request body of " + len + " bytes exceeds the " + maxBodyBytes + "-byte limit",
-                    pendingBodyBytes: len);
-            body = await ReadExactAsync(stream, len, ct).ConfigureAwait(false);
+                    pendingBodyBytes: expectContinue ? 0 : len);
+
+            if (len > 0)
+            {
+                // Honor Expect: 100-continue — without this the client withholds the body while we
+                // wait to read it, deadlocking until the read timeout (~30s).
+                if (expectContinue)
+                    await WriteContinueAsync(stream, ct).ConfigureAwait(false);
+                body = await ReadExactAsync(stream, len, ct).ConfigureAwait(false);
+            }
         }
 
         return new BridgeRequest(method, path, query, headers, body,
             new Dictionary<string, string>());
+    }
+
+    private static bool IsFramingHeader(string name) =>
+        string.Equals(name, "Content-Length", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "Transfer-Encoding", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "Host", StringComparison.OrdinalIgnoreCase);
+
+    private static readonly byte[] ContinueResponse = Encoding.ASCII.GetBytes("HTTP/1.1 100 Continue\r\n\r\n");
+
+    private static async Task WriteContinueAsync(Stream stream, CancellationToken ct)
+    {
+        await stream.WriteAsync(ContinueResponse.AsMemory(), ct).ConfigureAwait(false);
+        await stream.FlushAsync(ct).ConfigureAwait(false);
     }
 
     private static (string Path, string Query) SplitTarget(string target)

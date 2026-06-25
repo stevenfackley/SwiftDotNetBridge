@@ -22,6 +22,12 @@ public static class BridgeLimits
     public static int MaxBodyBytes { get; set; } = 16 * 1024 * 1024;
 
     /// <summary>
+    /// Maximum number of connections handled concurrently. Excess connections are shed with
+    /// <c>503</c> instead of spawning unbounded tasks (admission control). Default 16.
+    /// </summary>
+    public static int MaxConcurrentConnections { get; set; } = 16;
+
+    /// <summary>
     /// Maximum time allowed to read one complete request before the connection is dropped.
     /// Guards against slow/stalled clients holding a connection (and its task) open. Default 30&#160;s.
     /// </summary>
