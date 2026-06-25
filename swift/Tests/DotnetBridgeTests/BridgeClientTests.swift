@@ -34,4 +34,20 @@ final class BridgeClientTests: XCTestCase {
             await client.shutdown()
         }
     }
+
+    /// Many concurrent requests on one client — exercises the connection cap, the actor's serialized
+    /// ensureStarted, and concurrent loopback handling (no global shutdown race within the group).
+    func testConcurrentRequests() async throws {
+        let client = BridgeClient()
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<10 {
+                group.addTask {
+                    let data = try await client.get("/health")
+                    XCTAssertEqual(String(data: data, encoding: .utf8), "ok")
+                }
+            }
+            for try await _ in group {}
+        }
+        await client.shutdown()
+    }
 }
