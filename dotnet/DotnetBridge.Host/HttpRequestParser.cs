@@ -46,7 +46,25 @@ public static class HttpRequestParser
         var method = parts[0];
         var target = parts[1];
 
-        var (path, query) = SplitTarget(target);
+        // CONNECT (tunnel) has no place on a loopback HTTP server — reject it.
+        if (string.Equals(method, "CONNECT", StringComparison.OrdinalIgnoreCase))
+            throw new BridgeProtocolException(400, "CONNECT is not supported");
+
+        var qIdx = target.IndexOf('?');
+        var rawPath = qIdx < 0 ? target : target.Substring(0, qIdx);
+        var query = qIdx < 0 ? string.Empty : target.Substring(qIdx + 1);
+
+        // Origin-form only: reject absolute-form (proxy) and asterisk-form targets.
+        if (rawPath.Length == 0 || rawPath[0] != '/')
+            throw new BridgeProtocolException(400, "Only origin-form request targets are supported");
+        // An encoded separator would decode into a path boundary the router never vetted — reject it.
+        if (rawPath.Contains("%2f", StringComparison.OrdinalIgnoreCase) ||
+            rawPath.Contains("%5c", StringComparison.OrdinalIgnoreCase))
+            throw new BridgeProtocolException(400, "Encoded path separators are not allowed");
+
+        var path = Uri.UnescapeDataString(rawPath);
+        if (HasUnsafeSegments(path))
+            throw new BridgeProtocolException(400, "Path contains empty, '.' or '..' segments");
 
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         string? line;
@@ -115,11 +133,21 @@ public static class HttpRequestParser
         await stream.FlushAsync(ct).ConfigureAwait(false);
     }
 
-    private static (string Path, string Query) SplitTarget(string target)
+    /// <summary>
+    /// True if the decoded path has an interior empty segment (<c>//</c>), or a <c>.</c>/<c>..</c>
+    /// segment — the dot-segment and duplicate-slash cases a canonicalizing router must reject so
+    /// route matching can't be tricked by a non-canonical path. A single trailing slash is allowed.
+    /// </summary>
+    private static bool HasUnsafeSegments(string path)
     {
-        var q = target.IndexOf('?');
-        if (q < 0) return (Uri.UnescapeDataString(target), string.Empty);
-        return (Uri.UnescapeDataString(target[..q]), target[(q + 1)..]);
+        var parts = path.Split('/');
+        for (var i = 1; i < parts.Length; i++)   // skip the empty segment before the leading '/'
+        {
+            var p = parts[i];
+            if (p.Length == 0 && i != parts.Length - 1) return true;   // interior '//'
+            if (p == "." || p == "..") return true;
+        }
+        return false;
     }
 
     private static async Task<string?> ReadLineAsync(Stream stream, int maxLineBytes, CancellationToken ct)

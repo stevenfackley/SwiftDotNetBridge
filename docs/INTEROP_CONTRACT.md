@@ -90,6 +90,8 @@ reader is bounded and the server fails closed:
 | Path matches, method does not | `405` | — |
 | No matching route | `404` | — |
 | Route handler throws | `500` (generic body; detail → `BridgeDiagnostics`) | — |
+| `Host` not loopback, `CONNECT`, absolute-form target, or `%2f`/`%5c`/`.`/`..`/`//` in path | `400` | — |
+| Token configured but `X-DNI-Auth` missing/wrong | `401` | `DNI_AUTH_TOKEN` env |
 
 - A rejected oversized request is **bounded-drained** (≤ 64 KiB) before the connection closes, so the
   client reads the `413` cleanly instead of a TCP reset — without letting a huge body make the drain
@@ -102,6 +104,21 @@ reader is bounded and the server fails closed:
 - Set any `BridgeLimits` value (and `BridgeDiagnostics.OnError`) **before** `dni_http_start`.
 - The sample module returns errors as a JSON envelope (`{"error":"..."}`), and the Swift client
   surfaces the response body on `BridgeError.http(status:body:)` rather than discarding it.
+
+## Loopback authentication & request hardening
+
+The loopback port is reachable by any same-device process, so the server treats it as untrusted:
+
+- **Origin binding.** Every request must carry `Host: 127.0.0.1[:port]`; a spoofed/non-loopback
+  `Host` is `400` (DNS-rebind defense). Only origin-form targets are accepted — `CONNECT`,
+  absolute-form (`http://…`), and asterisk-form are rejected.
+- **Path canonicalization.** Encoded separators (`%2f`/`%5c`), dot-segments (`.`/`..`), and interior
+  duplicate slashes (`//`) are `400`, so route matching can't be tricked by a non-canonical path.
+- **Capability token (optional).** When `DNI_AUTH_TOKEN` is set in the environment **before**
+  `dni_initialize`, every request must present that token in `X-DNI-Auth`; the server compares it in
+  constant time and returns `401` otherwise. The token never crosses the C ABI — the Swift host
+  generates a fresh 256-bit per-launch token, `setenv`s it before init, and sends it on each request.
+  When the variable is unset, auth is disabled (the default for tests/samples).
 
 ---
 

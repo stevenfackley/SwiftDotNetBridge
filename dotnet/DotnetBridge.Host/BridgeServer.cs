@@ -205,6 +205,18 @@ public sealed class BridgeServer : IDisposable
 
     private async Task<BridgeResponse> DispatchAsync(BridgeRequest req, CancellationToken ct)
     {
+        // Origin binding: only serve requests addressed to our loopback authority (DNS-rebind defense).
+        if (!IsLoopbackHost(req))
+            return BridgeResponse.Text("Bad Request", 400);
+
+        // Capability-token auth (when a token is configured): require a valid X-DNI-Auth header.
+        if (BridgeAuth.IsEnabled)
+        {
+            req.Headers.TryGetValue("X-DNI-Auth", out var presented);
+            if (!BridgeAuth.IsAuthorized(presented))
+                return BridgeResponse.Text("Unauthorized", 401);
+        }
+
         var match = _routes.Match(req.Method, req.Path);
         if (match is null)
         {
@@ -255,6 +267,14 @@ public sealed class BridgeServer : IDisposable
             }
         }
         catch { /* best effort: if draining fails, we still send the response and close */ }
+    }
+
+    private static bool IsLoopbackHost(BridgeRequest req)
+    {
+        if (!req.Headers.TryGetValue("Host", out var host) || host.Length == 0) return false;
+        var colon = host.IndexOf(':');
+        var hostName = colon < 0 ? host : host.Substring(0, colon);
+        return string.Equals(hostName, "127.0.0.1", StringComparison.Ordinal);
     }
 
     private static string ReasonText(int status) => status switch

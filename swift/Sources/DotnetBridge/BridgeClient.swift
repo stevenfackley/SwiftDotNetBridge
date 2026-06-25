@@ -11,6 +11,16 @@ public actor BridgeClient {
     private var initialized = false
     private var port = 0
 
+    /// One capability token per process, sent on every request as `X-DNI-Auth`. The .NET side
+    /// reads the same value from the `DNI_AUTH_TOKEN` environment variable at initialize. It is a
+    /// process-global static (not per-instance, not regenerated on reconnect) because the .NET
+    /// runtime configures it once at init — a regenerated token would 401 itself after a re-bind.
+    private static let authToken: String = {
+        var bytes = [UInt8](repeating: 0, count: 32)        // 256 bits of CSPRNG randomness
+        for i in bytes.indices { bytes[i] = UInt8.random(in: 0...255) }
+        return Data(bytes).base64EncodedString()
+    }()
+
     /// Creates a client.
     /// - Parameter session: the `URLSession` used for loopback requests (defaults to `.shared`).
     public init(session: URLSession = .shared) { self.session = session }
@@ -20,6 +30,10 @@ public actor BridgeClient {
     /// background suspend kills the listener. Blocking C calls run off-actor.
     public func ensureStarted() async throws {
         if !initialized {
+            // Hand the capability token to .NET out-of-band (no ABI change): set it in the
+            // environment before the first dni_initialize reads it. Re-setting the same value on a
+            // later restart is harmless.
+            setenv("DNI_AUTH_TOKEN", Self.authToken, 1)
             let rc = await Task.detached(priority: .userInitiated) { Int(dni_initialize()) }.value
             guard rc == 0 else { throw BridgeError.status(rc) }
             initialized = true
@@ -58,6 +72,7 @@ public actor BridgeClient {
         }
         var req = URLRequest(url: url)
         req.httpMethod = method
+        req.setValue(Self.authToken, forHTTPHeaderField: "X-DNI-Auth")
         if let body {
             req.httpBody = body
             req.setValue(contentType, forHTTPHeaderField: "Content-Type")
