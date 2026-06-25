@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 
 namespace DotnetBridge.Abstractions;
@@ -18,6 +19,14 @@ public sealed class BridgeResponse
 
     /// <summary>Raw response body bytes. Defaults to an empty array.</summary>
     public byte[] Body { get; set; } = Array.Empty<byte>();
+
+    /// <summary>
+    /// Extra response headers (case-insensitive). The transport always writes Content-Type,
+    /// Content-Length, and Connection itself; use this for additional headers such as a correlated
+    /// <c>X-Request-ID</c>.
+    /// </summary>
+    public IDictionary<string, string> Headers { get; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Build a JSON response (UTF-8) with the given status.</summary>
     public static BridgeResponse Json(string json, int status = 200) => new()

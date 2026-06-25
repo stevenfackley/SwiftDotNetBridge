@@ -127,7 +127,8 @@ public class HardeningTests
     {
         string? ctx = null;
         Exception? err = null;
-        BridgeDiagnostics.OnError = (c, e) => { ctx = c; err = e; };
+        var cls = BridgeErrorClass.Unknown;
+        BridgeDiagnostics.OnError = (k, c, e) => { cls = k; ctx = c; err = e; };
         try
         {
             var routes = new RouteTable();
@@ -141,6 +142,7 @@ public class HardeningTests
             Assert.NotNull(ctx);
             Assert.Contains("handler error", ctx!);                 // Finding F: the failure is observable
             Assert.IsType<InvalidOperationException>(err);
+            Assert.Equal(BridgeErrorClass.Handler, cls);            // #5: classified failure
         }
         finally { BridgeDiagnostics.OnError = null; }
     }

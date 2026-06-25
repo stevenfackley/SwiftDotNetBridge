@@ -91,7 +91,7 @@ public sealed class BridgeServer : IDisposable
                 {
                     // Unexpected, possibly transient. Don't spin a tight failing loop —
                     // exit and let the finally reset state so the next Start() re-binds.
-                    BridgeDiagnostics.Error("accept loop fault", ex);
+                    BridgeDiagnostics.Error(BridgeErrorClass.AcceptLoop, "accept loop fault", ex);
                     break;
                 }
 
@@ -178,17 +178,19 @@ public sealed class BridgeServer : IDisposable
                 readCts.CancelAfter(BridgeLimits.ReadTimeout);
 
                 BridgeResponse resp;
+                string? requestId = null;
                 try
                 {
                     var req = await HttpRequestParser.ReadAsync(stream, readCts.Token).ConfigureAwait(false);
                     if (req is null) return;   // client closed / empty — nothing to answer
+                    req.Headers.TryGetValue("X-Request-ID", out requestId);   // for correlation/echo
 
                     resp = await DispatchAsync(req, ct).ConfigureAwait(false);
                 }
                 catch (BridgeProtocolException pex)
                 {
                     // A bad/oversized request: answer with the carried 4xx, no internal detail.
-                    BridgeDiagnostics.Error("protocol error " + pex.StatusCode + ": " + pex.Message);
+                    BridgeDiagnostics.Error(BridgeErrorClass.Protocol, "protocol error " + pex.StatusCode + ": " + pex.Message);
 
                     // The client may still be transmitting the rejected body. Bounded-drain it so
                     // the client can read our response cleanly instead of getting a TCP reset on
@@ -199,12 +201,14 @@ public sealed class BridgeServer : IDisposable
                     resp = BridgeResponse.Text(ReasonText(pex.StatusCode), pex.StatusCode);
                 }
 
+                // Echo the caller's request id so a Swift-side failure correlates to a .NET log line.
+                if (!string.IsNullOrEmpty(requestId)) resp.Headers["X-Request-ID"] = requestId!;
                 await HttpResponseWriter.WriteAsync(stream, resp, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 // Read timeout (the linked token fired, not a server stop): the client stalled.
-                BridgeDiagnostics.Error("connection read timed out");
+                BridgeDiagnostics.Error(BridgeErrorClass.Connection, "connection read timed out");
             }
             catch (OperationCanceledException)
             {
@@ -213,7 +217,7 @@ public sealed class BridgeServer : IDisposable
             catch (Exception ex)
             {
                 // Connection-level failure (socket reset mid-write, etc.). Log, never crash.
-                BridgeDiagnostics.Error("connection handling failed", ex);
+                BridgeDiagnostics.Error(BridgeErrorClass.Connection, "connection handling failed", ex);
             }
         }
     }
@@ -255,7 +259,9 @@ public sealed class BridgeServer : IDisposable
         {
             // A handler threw — that's our fault → 500, but never leak the message or stack to
             // the client. The full detail goes to diagnostics instead.
-            BridgeDiagnostics.Error("handler error for " + req.Method + " " + req.Path, ex);
+            req.Headers.TryGetValue("X-Request-ID", out var rid);
+            BridgeDiagnostics.Error(BridgeErrorClass.Handler,
+                "handler error for " + req.Method + " " + req.Path + (rid is null ? "" : " (req " + rid + ")"), ex);
             return BridgeResponse.Text("Internal Server Error", 500);
         }
     }

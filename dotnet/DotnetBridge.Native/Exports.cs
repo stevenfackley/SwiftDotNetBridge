@@ -21,7 +21,7 @@ public static class Exports
     public static int Initialize()
     {
         try { return BridgeRuntime.Initialize(Bootstrap.Modules()); }
-        catch (Exception ex) { BridgeDiagnostics.Error("dni_initialize failed", ex); return DniStatus.Internal; }
+        catch (Exception ex) { BridgeDiagnostics.Error(BridgeErrorClass.Lifecycle, "dni_initialize failed", ex); return DniStatus.Internal; }
     }
 
     /// <summary>
@@ -33,7 +33,7 @@ public static class Exports
     public static int HttpStart()
     {
         try { return BridgeRuntime.HttpStart(); }
-        catch (Exception ex) { BridgeDiagnostics.Error("dni_http_start failed", ex); return DniStatus.Internal; }
+        catch (Exception ex) { BridgeDiagnostics.Error(BridgeErrorClass.Lifecycle, "dni_http_start failed", ex); return DniStatus.Internal; }
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ public static class Exports
     public static int HttpStop()
     {
         try { return BridgeRuntime.HttpStop(); }
-        catch (Exception ex) { BridgeDiagnostics.Error("dni_http_stop failed", ex); return DniStatus.Internal; }
+        catch (Exception ex) { BridgeDiagnostics.Error(BridgeErrorClass.Lifecycle, "dni_http_stop failed", ex); return DniStatus.Internal; }
     }
 
     /// <summary>
@@ -55,6 +55,6 @@ public static class Exports
     {
         // dni_shutdown must never throw or report a failure code — it is the last call.
         try { BridgeRuntime.Shutdown(); }
-        catch (Exception ex) { BridgeDiagnostics.Error("dni_shutdown failed", ex); }
+        catch (Exception ex) { BridgeDiagnostics.Error(BridgeErrorClass.Lifecycle, "dni_shutdown failed", ex); }
     }
 }
