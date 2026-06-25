@@ -84,6 +84,7 @@ public actor BridgeClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue(Self.authToken, forHTTPHeaderField: "X-DNI-Auth")
+        req.setValue(UUID().uuidString, forHTTPHeaderField: "X-Request-ID")   // echoed back for correlation
         if let body {
             req.httpBody = body
             req.setValue(contentType, forHTTPHeaderField: "Content-Type")

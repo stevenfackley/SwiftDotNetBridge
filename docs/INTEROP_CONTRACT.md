@@ -106,7 +106,10 @@ reader is bounded and the server fails closed:
   client reads the `413` cleanly instead of a TCP reset — without letting a huge body make the drain
   itself a DoS.
 - A `500` never echoes the exception message or stack to the client; the full detail goes to
-  `BridgeDiagnostics.OnError`.
+  `BridgeDiagnostics.OnError`, tagged with a `BridgeErrorClass`
+  (Protocol/Connection/AcceptLoop/Handler/Lifecycle) for filtering. An `X-Request-ID` sent by the
+  client is echoed back in the response and included in handler-error diagnostics, so a Swift-side
+  failure correlates to a specific .NET log line.
 - Only `Content-Length` framing is supported; `Transfer-Encoding` is rejected (it is ambiguous
   against `Content-Length` and a classic request-smuggling vector). `Expect: 100-continue` is
   honored — the server sends `100 Continue` before reading the body, so larger POSTs don't stall.
