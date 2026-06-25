@@ -111,6 +111,13 @@ public sealed class BridgeServer : IDisposable
     /// </summary>
     private async Task HandleConnectionAsync(TcpClient client, CancellationToken ct)
     {
+        // Under memory pressure, shed everything with 503 rather than risk a Jetsam kill.
+        if (BridgeMemory.Degraded)
+        {
+            await RejectSaturatedAsync(client, ct).ConfigureAwait(false);
+            return;
+        }
+
         if (Interlocked.Increment(ref _activeConnections) > BridgeLimits.MaxConcurrentConnections)
         {
             Interlocked.Decrement(ref _activeConnections);

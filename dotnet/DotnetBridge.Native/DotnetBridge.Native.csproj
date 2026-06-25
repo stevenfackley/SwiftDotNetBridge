@@ -11,6 +11,11 @@
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <!-- Deterministic output name 'dni.dylib' (NativeAOT otherwise prefixes 'lib' on Unix). -->
     <UseNativeLibPrefix>false</UseNativeLibPrefix>
+    <!-- Mobile-friendly GC: workstation + non-concurrent for a lower memory footprint under Jetsam
+         pressure. Set DOTNET_GCHeapHardLimit (or runtimeconfig System.GC.HeapHardLimit) to cap the
+         heap if you need a hard ceiling. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../DotnetBridge.Host/DotnetBridge.Host.csproj" />

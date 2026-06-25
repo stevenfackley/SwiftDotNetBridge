@@ -94,6 +94,7 @@ reader is bounded and the server fails closed:
 | `Content-Length` over limit | `413` (before allocating) | `MaxBodyBytes` (16 MiB) |
 | `Transfer-Encoding`, duplicate framing header, or malformed `Content-Length` | `400` | — |
 | Too many concurrent connections | `503` (load shed) | `MaxConcurrentConnections` (16) |
+| Under iOS memory pressure (degraded mode) | `503` (shed all) | `BridgeMemory.Degraded` |
 | Client stalls mid-request | connection dropped | `ReadTimeout` (30 s) |
 | Path matches, method does not | `405` | — |
 | No matching route | `404` | — |
@@ -109,6 +110,11 @@ reader is bounded and the server fails closed:
 - Only `Content-Length` framing is supported; `Transfer-Encoding` is rejected (it is ambiguous
   against `Content-Length` and a classic request-smuggling vector). `Expect: 100-continue` is
   honored — the server sends `100 Continue` before reading the body, so larger POSTs don't stall.
+- **Memory pressure.** NativeAOT's GC doesn't react to iOS memory warnings on its own, so on Apple
+  platforms the runtime wires the OS `dispatch` memory-pressure source to `BridgeMemory.OnMemoryPressure`:
+  it forces a GC and enters degraded mode (sheds new connections with `503`) until pressure subsides —
+  trading a few 503s for not getting Jetsam-killed. The Native head also builds with workstation,
+  non-concurrent GC for a lower footprint.
 - Set any `BridgeLimits` value (and `BridgeDiagnostics.OnError`) **before** `dni_http_start`.
 - The sample module returns errors as a JSON envelope (`{"error":"..."}`), and the Swift client
   surfaces the response body on `BridgeError.http(status:body:)` rather than discarding it.

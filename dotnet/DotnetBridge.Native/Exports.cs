@@ -20,7 +20,12 @@ public static class Exports
     [UnmanagedCallersOnly(EntryPoint = "dni_initialize")]
     public static int Initialize()
     {
-        try { return BridgeRuntime.Initialize(Bootstrap.Modules()); }
+        try
+        {
+            var rc = BridgeRuntime.Initialize(Bootstrap.Modules());
+            if (rc == DniStatus.Ok) MemoryPressureMonitor.Register();   // Apple platforms only; no-op elsewhere
+            return rc;
+        }
         catch (Exception ex) { BridgeDiagnostics.Error("dni_initialize failed", ex); return DniStatus.Internal; }
     }
 
