@@ -21,6 +21,8 @@ public static class HttpResponseWriter
         head.Append("Content-Type: ").Append(resp.ContentType).Append("\r\n");
         head.Append("Content-Length: ").Append(resp.Body.Length).Append("\r\n");
         head.Append("Connection: close\r\n");
+        foreach (var header in resp.Headers)
+            head.Append(header.Key).Append(": ").Append(header.Value).Append("\r\n");
         head.Append("\r\n");
 
         var headBytes = Encoding.ASCII.GetBytes(head.ToString());
