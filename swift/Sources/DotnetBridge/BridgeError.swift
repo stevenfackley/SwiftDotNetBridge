@@ -10,4 +10,6 @@ public enum BridgeError: Error, Sendable, Equatable {
     case http(status: Int, body: Data)
     /// Could not build a request URL for the given path.
     case badURL(String)
+    /// Too little iOS background execution time remains to safely start work; retry when foregrounded.
+    case backgroundExpiringSoon
 }

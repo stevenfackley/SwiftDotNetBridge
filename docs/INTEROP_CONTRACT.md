@@ -44,6 +44,14 @@ dni_initialize()   // once, idempotent
 `dni_http_start()` again on every foreground-resume to obtain a (possibly new) port before issuing
 requests. `BridgeClient.ensureStarted()` does this automatically by calling it before each request.
 
+**Lifecycle hardening.** Each (re)bind is tagged with a generation, so a stale accept-loop from an
+old epoch can never tear down a newer listener. `dni_http_stop`/`dni_shutdown` stop accepting
+immediately, let in-flight requests finish within `BridgeLimits.GracefulStopTimeout` (2&#160;s), then
+abort the rest. Shutdown is re-initializable (it returns to the uninitialized state); calling
+`dni_http_start` before `dni_initialize` deterministically returns `DNI_NOT_INITIALIZED` rather than
+half-starting. On iOS, `BridgeClient` refuses to start when `< 5 s` of background time remains,
+throwing `BridgeError.backgroundExpiringSoon` so the caller retries when foregrounded.
+
 ## Payload contract
 
 Request/response bodies **never cross the C ABI** — they travel as HTTP bytes over the loopback
