@@ -23,4 +23,15 @@ final class BridgeClientTests: XCTestCase {
         XCTAssertTrue((String(data: out, encoding: .utf8) ?? "").contains("Nikola Tesla"))
         await client.shutdown()
     }
+
+    /// Hammer start -> request -> shutdown repeatedly in one process to exercise the
+    /// re-initializable shutdown plus the generation/graceful lifecycle hardening.
+    func testLifecycleStress() async throws {
+        for _ in 0..<10 {
+            let client = BridgeClient()
+            let data = try await client.get("/health")
+            XCTAssertEqual(String(data: data, encoding: .utf8), "ok")
+            await client.shutdown()
+        }
+    }
 }

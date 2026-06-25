@@ -41,3 +41,27 @@ jobs:
         run: |
           cd swift
           swift test
+
+  fuzz:
+    name: Parser fuzzing (SharpFuzz smoke)
+    runs-on: ubuntu-latest
+    continue-on-error: true   # best-effort scaffold; the deterministic ParserFuzzTests gate in dotnet-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install SharpFuzz CLI + clang
+        run: |
+          dotnet tool install --global SharpFuzz.CommandLine
+          sudo apt-get update && sudo apt-get install -y clang
+      - name: Build fuzz target
+        run: dotnet build fuzz/DotnetBridge.Fuzz -c Release
+      - name: Instrument + 60s fuzz run
+        working-directory: fuzz/DotnetBridge.Fuzz/bin/Release/net10.0
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          sharpfuzz DotnetBridge.Host.dll
+          mkdir -p corpus
+          printf 'GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n' > corpus/seed
+          ./DotnetBridge.Fuzz -max_total_time=60 -timeout=10 corpus || true
